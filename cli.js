@@ -16,6 +16,8 @@ const HELP = `Usage:
   octocrawl all <url> [--clean] [--llm]     Run scrape + extract + markdown (+ optional clean)
 
 Flags:
+  --concurrency <N>    scrape: parallel page workers (default 4)
+  --fresh              scrape: ignore saved state and start over
   --threshold <0..1>   clean heuristic: fraction of pages a block must appear in to be boilerplate (default 0.5)
 
 Env:
@@ -31,10 +33,21 @@ function parseThreshold(args) {
   return v;
 }
 
+function parseScrapeOpts(args) {
+  const opts = { fresh: args.includes('--fresh') };
+  const ci = args.indexOf('--concurrency');
+  if (ci >= 0) {
+    const v = Number(args[ci + 1]);
+    if (!Number.isInteger(v) || v < 1) throw new Error('--concurrency must be a positive integer');
+    opts.concurrency = v;
+  }
+  return opts;
+}
+
 try {
   switch (cmd) {
     case 'scrape':
-      await scrape(rest[0]);
+      await scrape(rest[0], parseScrapeOpts(rest));
       break;
     case 'extract':
       await extract(resolveSlug(rest[0]));
@@ -52,7 +65,7 @@ try {
     case 'all': {
       const url = rest[0];
       if (!url) throw new Error('all: URL required');
-      const slug = await scrape(url);
+      const slug = await scrape(url, parseScrapeOpts(rest));
       await extract(slug);
       await markdown(slug);
       if (rest.includes('--clean')) {
